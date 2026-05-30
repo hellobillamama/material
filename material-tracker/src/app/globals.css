@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    color: var(--color-gray-900);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Custom utility classes */
+@utility card {
+  background-color: white;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border: 1px solid var(--color-gray-100);
+}
+
+@utility btn-primary {
+  background-color: var(--color-blue-600);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  &:active {
+    background-color: var(--color-blue-700);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+@utility btn-secondary {
+  background-color: var(--color-gray-100);
+  color: var(--color-gray-700);
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  &:active {
+    background-color: var(--color-gray-200);
+  }
+}
+
+@utility btn-success {
+  background-color: var(--color-emerald-600);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  &:active {
+    background-color: var(--color-emerald-700);
+  }
+}
+
+@utility btn-danger {
+  background-color: var(--color-red-600);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  &:active {
+    background-color: var(--color-red-700);
+  }
+}
+
+@utility btn-warning {
+  background-color: var(--color-orange-500);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: background-color 0.15s;
+  &:active {
+    background-color: var(--color-orange-600);
+  }
+}
+
+@utility input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background-color: white;
+  &::placeholder {
+    color: var(--color-gray-400);
+  }
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-blue-500);
+    border-color: transparent;
+  }
+}
+
+@utility status-badge {
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  display: inline-block;
+}
+
+@utility nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  transition: color 0.15s;
+}
+
+@utility nav-item-active {
+  color: var(--color-blue-600);
+}
+
+@utility nav-item-inactive {
+  color: var(--color-gray-400);
+}
+
+@utility pb-safe {
+  padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Hide scrollbar for mobile */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slide up animation for modals */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
