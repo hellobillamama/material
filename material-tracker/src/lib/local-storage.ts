@@ -1,36 +1,88 @@
 /**
- * Local Storage Database Layer + Google Sheets Sync
+ * Data Layer — Google Sheets as primary database
  * 
- * Works locally with localStorage for instant speed.
- * When Google Sheets is configured, also syncs data to the sheet.
+ * For 7 users working together:
+ * - Google Sheets = single source of truth
+ * - localStorage = fast cache (for instant UI)
+ * - Auto-refresh every 10 seconds pulls latest from Sheet
+ * - Every write goes to Sheet first, then updates cache
  */
 
 import { MaterialRequest, StatusHistory, Vendor, Status, ProcessType, PROCESS_SLA } from './types';
-import { isGoogleSheetsConfigured, getAllRequestsFromSheet, createRequestInSheet, updateRequestInSheet, addHistoryToSheet, getHistoryFromSheet } from './sheets';
+import {
+  isGoogleSheetsConfigured,
+  getAllRequestsFromSheet,
+  createRequestInSheet,
+  updateRequestInSheet,
+  addHistoryToSheet,
+  getHistoryFromSheet,
+} from './sheets';
 
 const STORAGE_KEYS = {
   REQUESTS: 'material_tracker_requests',
   HISTORY: 'material_tracker_history',
-  VENDORS: 'material_tracker_vendors',
+  LAST_SYNC: 'material_tracker_last_sync',
 };
 
-// ============ HELPERS ============
+// ============ LOCAL CACHE HELPERS ============
 
-function getFromStorage<T>(key: string): T[] {
+function getFromCache<T>(key: string): T[] {
   if (typeof window === 'undefined') return [];
   const data = localStorage.getItem(key);
   return data ? JSON.parse(data) : [];
 }
 
-function saveToStorage<T>(key: string, data: T[]): void {
+function saveToCache<T>(key: string, data: T[]): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-// ============ SEED DATA ============
+// ============ SYNC ENGINE ============
+
+/**
+ * Fetch all data from Google Sheets and update local cache.
+ * Returns true if successful.
+ */
+export async function syncFromGoogleSheets(): Promise<boolean> {
+  if (!isGoogleSheetsConfigured()) return false;
+
+  try {
+    const requests = await getAllRequestsFromSheet();
+    if (requests && requests.length >= 0) {
+      saveToCache(STORAGE_KEYS.REQUESTS, requests);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+      }
+    }
+    return true;
+  } catch (e) {
+    console.error('Sync failed:', e);
+    return false;
+  }
+}
+
+/**
+ * Start auto-refresh interval (every 10 seconds).
+ * Returns a cleanup function.
+ */
+export function startAutoSync(onUpdate: () => void): () => void {
+  if (!isGoogleSheetsConfigured()) return () => {};
+
+  const interval = setInterval(async () => {
+    const success = await syncFromGoogleSheets();
+    if (success) {
+      onUpdate();
+    }
+  }, 10000); // Every 10 seconds
+
+  return () => clearInterval(interval);
+}
+
+// ============ SEED DATA (only if no Google Sheets) ============
 
 export function seedDemoData(): void {
   if (typeof window === 'undefined') return;
+  if (isGoogleSheetsConfigured()) return; // Don't seed if Sheets is connected
 
   const existing = localStorage.getItem(STORAGE_KEYS.REQUESTS);
   if (existing) return;
@@ -142,26 +194,6 @@ export function seedDemoData(): void {
       created_at: now,
       updated_at: now,
     },
-    {
-      request_id: 'MR-006',
-      request_date: threeDaysAgo.split('T')[0],
-      material_name: 'Polki Set',
-      process_type: 'Plating',
-      quantity: 1,
-      unit: 'sets',
-      image_url: '',
-      requested_by: 'Deepak Kumar',
-      department: 'Store',
-      approved_by: 'Amit Patel',
-      current_holder: 'Store',
-      sent_to: '',
-      expected_return_date: threeDaysAgo.split('T')[0],
-      priority: 'Low',
-      status: 'Closed',
-      remarks: 'Completed and returned',
-      created_at: threeDaysAgo,
-      updated_at: yesterday,
-    },
   ];
 
   const demoHistory: StatusHistory[] = [
@@ -185,34 +217,14 @@ export function seedDemoData(): void {
     },
   ];
 
-  const demoVendors: Vendor[] = [
-    {
-      vendor_id: 'V-001',
-      vendor_name: 'Ramesh Karigar',
-      type: 'Karigar',
-      contact_person: 'Ramesh Soni',
-      mobile_number: '9876543210',
-      address: 'Zaveri Bazaar, Mumbai',
-    },
-    {
-      vendor_id: 'V-002',
-      vendor_name: 'Plating Unit',
-      type: 'Plating',
-      contact_person: 'Suresh Plater',
-      mobile_number: '9876543211',
-      address: 'Goregaon, Mumbai',
-    },
-  ];
-
-  saveToStorage(STORAGE_KEYS.REQUESTS, demoRequests);
-  saveToStorage(STORAGE_KEYS.HISTORY, demoHistory);
-  saveToStorage(STORAGE_KEYS.VENDORS, demoVendors);
+  saveToCache(STORAGE_KEYS.REQUESTS, demoRequests);
+  saveToCache(STORAGE_KEYS.HISTORY, demoHistory);
 }
 
-// ============ MATERIAL REQUESTS ============
+// ============ READ DATA (from cache) ============
 
 export function getAllRequestsLocal(): MaterialRequest[] {
-  return getFromStorage<MaterialRequest>(STORAGE_KEYS.REQUESTS);
+  return getFromCache<MaterialRequest>(STORAGE_KEYS.REQUESTS);
 }
 
 export function getRequestByIdLocal(id: string): MaterialRequest | null {
@@ -220,53 +232,52 @@ export function getRequestByIdLocal(id: string): MaterialRequest | null {
   return requests.find((r) => r.request_id === id) || null;
 }
 
-export function createRequestLocal(req: MaterialRequest): void {
+// ============ WRITE DATA (to Sheet + cache) ============
+
+export async function createRequestLocal(req: MaterialRequest): Promise<void> {
+  // Update local cache immediately (instant UI)
   const requests = getAllRequestsLocal();
   requests.push(req);
-  saveToStorage(STORAGE_KEYS.REQUESTS, requests);
+  saveToCache(STORAGE_KEYS.REQUESTS, requests);
 
-  // Sync to Google Sheets in background
+  // Write to Google Sheets
   if (isGoogleSheetsConfigured()) {
-    createRequestInSheet(req).catch(console.error);
+    await createRequestInSheet(req);
   }
 }
 
-export function updateRequestLocal(req: MaterialRequest): void {
+export async function updateRequestLocal(req: MaterialRequest): Promise<void> {
+  // Update local cache immediately
   const requests = getAllRequestsLocal();
   const index = requests.findIndex((r) => r.request_id === req.request_id);
   if (index !== -1) {
     requests[index] = req;
-    saveToStorage(STORAGE_KEYS.REQUESTS, requests);
+    saveToCache(STORAGE_KEYS.REQUESTS, requests);
   }
 
-  // Sync to Google Sheets in background
+  // Write to Google Sheets
   if (isGoogleSheetsConfigured()) {
-    updateRequestInSheet(req).catch(console.error);
+    await updateRequestInSheet(req);
   }
 }
 
 // ============ STATUS HISTORY ============
 
 export function getHistoryByRequestIdLocal(requestId: string): StatusHistory[] {
-  const history = getFromStorage<StatusHistory>(STORAGE_KEYS.HISTORY);
+  const history = getFromCache<StatusHistory>(STORAGE_KEYS.HISTORY);
   return history.filter((h) => h.request_id === requestId);
 }
 
-export function addStatusHistoryLocal(entry: StatusHistory): void {
-  const history = getFromStorage<StatusHistory>(STORAGE_KEYS.HISTORY);
+export async function addStatusHistoryLocal(entry: StatusHistory): Promise<void> {
+  // Update local cache
+  const history = getFromCache<StatusHistory>(STORAGE_KEYS.HISTORY);
   history.push(entry);
-  saveToStorage(STORAGE_KEYS.HISTORY, history);
+  saveToCache(STORAGE_KEYS.HISTORY, history);
 
-  // Sync to Google Sheets in background
+  // Write to Google Sheets
   if (isGoogleSheetsConfigured()) {
-    addHistoryToSheet(entry).catch(console.error);
+    await addHistoryToSheet(entry);
   }
-}
-
-// ============ VENDORS ============
-
-export function getAllVendorsLocal(): Vendor[] {
-  return getFromStorage<Vendor>(STORAGE_KEYS.VENDORS);
 }
 
 // ============ DASHBOARD ============
@@ -275,10 +286,8 @@ export function getDashboardStatsLocal() {
   const requests = getAllRequestsLocal();
   const now = new Date();
 
-  // Pending = everything NOT closed
   const pending = requests.filter((r) => r.status !== 'Closed');
 
-  // Delayed = expected return date passed and not closed/received
   const delayed = requests.filter(
     (r) =>
       r.expected_return_date &&
@@ -289,7 +298,6 @@ export function getDashboardStatsLocal() {
   const ordered = requests.filter((r) => r.status === 'Ordered');
   const inProcess = requests.filter((r) => r.status === 'In Process');
 
-  // Recent updates: only pending items (not closed), sorted by priority then date
   const priorityOrder: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
   const recentPending = [...pending]
     .sort((a, b) => {
@@ -334,25 +342,4 @@ export function getClosedRequestsLocal(): MaterialRequest[] {
   return requests
     .filter((r) => r.status === 'Closed')
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-}
-
-// ============ SYNC WITH GOOGLE SHEETS ============
-
-/**
- * Pull all data from Google Sheets and replace local storage.
- * Call this on app load to get latest data from all devices.
- */
-export async function syncFromGoogleSheets(): Promise<boolean> {
-  if (!isGoogleSheetsConfigured()) return false;
-
-  try {
-    const requests = await getAllRequestsFromSheet();
-    if (requests.length > 0) {
-      saveToStorage(STORAGE_KEYS.REQUESTS, requests);
-    }
-    return true;
-  } catch (e) {
-    console.error('Sync from Google Sheets failed:', e);
-    return false;
-  }
 }

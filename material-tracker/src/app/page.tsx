@@ -8,7 +8,7 @@ import Pending from "@/components/Pending";
 import Closed from "@/components/Closed";
 import Search from "@/components/Search";
 import RequestDetail from "@/components/RequestDetail";
-import { seedDemoData, syncFromGoogleSheets } from "@/lib/local-storage";
+import { seedDemoData, syncFromGoogleSheets, startAutoSync } from "@/lib/local-storage";
 import { isGoogleSheetsConfigured } from "@/lib/sheets";
 
 type Tab = "home" | "new" | "pending" | "search" | "closed";
@@ -18,38 +18,50 @@ export default function Home() {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingFilter, setPendingFilter] = useState<string>("all");
+  const [syncing, setSyncing] = useState(false);
+
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   useEffect(() => {
-    // If Google Sheets is configured, sync from it
     if (isGoogleSheetsConfigured()) {
+      // First load: fetch from Google Sheets
+      setSyncing(true);
       syncFromGoogleSheets().then((synced) => {
         if (!synced) {
-          // Fallback to demo data if sync fails
           seedDemoData();
         }
+        setSyncing(false);
         refresh();
       });
+
+      // Auto-refresh every 10 seconds to keep all 7 users in sync
+      const stopSync = startAutoSync(() => {
+        refresh();
+      });
+
+      return () => stopSync();
     } else {
       // No Google Sheets — use local demo data
       seedDemoData();
     }
   }, []);
 
-  const refresh = () => setRefreshKey((k) => k + 1);
-
   const openDetail = (id: string) => setSelectedRequestId(id);
   const closeDetail = () => {
     setSelectedRequestId(null);
-    refresh();
+    // Re-sync when coming back from detail
+    if (isGoogleSheetsConfigured()) {
+      syncFromGoogleSheets().then(() => refresh());
+    } else {
+      refresh();
+    }
   };
 
-  // Called when a dashboard stat card is clicked
   const handleFilterByStatus = (status: string) => {
     setPendingFilter(status);
     setActiveTab("pending");
   };
 
-  // Reset filter when manually switching to pending tab
   const handleTabChange = (tab: Tab) => {
     if (tab === "pending") {
       setPendingFilter("all");
@@ -68,6 +80,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Sync indicator */}
+      {syncing && (
+        <div className="fixed top-0 left-0 right-0 bg-blue-600 text-white text-xs text-center py-1 z-50">
+          Syncing...
+        </div>
+      )}
+
       <div className="pb-safe">
         {activeTab === "home" && (
           <Dashboard
@@ -77,7 +96,15 @@ export default function Home() {
           />
         )}
         {activeTab === "new" && (
-          <NewRequest onSuccess={() => { setActiveTab("home"); refresh(); }} />
+          <NewRequest onSuccess={() => {
+            setActiveTab("home");
+            // Re-sync after creating
+            if (isGoogleSheetsConfigured()) {
+              setTimeout(() => syncFromGoogleSheets().then(() => refresh()), 1000);
+            } else {
+              refresh();
+            }
+          }} />
         )}
         {activeTab === "pending" && (
           <Pending

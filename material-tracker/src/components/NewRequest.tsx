@@ -49,7 +49,7 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.material_name || !form.requested_by) return;
 
@@ -79,7 +79,7 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
       updated_at: now,
     };
 
-    createRequestLocal(request);
+    await createRequestLocal(request);
 
     setSuccess(true);
     setTimeout(() => {

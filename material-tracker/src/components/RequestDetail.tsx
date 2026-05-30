@@ -48,11 +48,11 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
     setHistory(hist);
   }
 
-  function handleAction(status: Status) {
+  async function handleAction(status: Status) {
     if (!request) return;
     const now = new Date().toISOString();
 
-    addStatusHistoryLocal({
+    await addStatusHistoryLocal({
       history_id: generateHistoryId(),
       request_id: request.request_id,
       old_status: request.status,
@@ -62,7 +62,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
       comments: `Status changed to ${status}`,
     });
 
-    updateRequestLocal({
+    await updateRequestLocal({
       ...request,
       status,
       updated_at: now,
@@ -72,11 +72,11 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
   }
 
 
-  function handleStatusUpdate() {
+  async function handleStatusUpdate() {
     if (!request) return;
     const now = new Date().toISOString();
 
-    addStatusHistoryLocal({
+    await addStatusHistoryLocal({
       history_id: generateHistoryId(),
       request_id: request.request_id,
       old_status: request.status,
@@ -86,7 +86,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
       comments: statusComment,
     });
 
-    updateRequestLocal({
+    await updateRequestLocal({
       ...request,
       status: newStatus,
       current_holder: newHolder || request.current_holder,
