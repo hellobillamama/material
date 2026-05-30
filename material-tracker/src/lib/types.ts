@@ -8,7 +8,7 @@ export type Priority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
 export type ProcessType =
   | 'Plating'
-  | 'Dying'
+  | 'Dyeing'
   | 'Purchase'
   | 'Wrapping'
   | 'Jaipur Ordered'
@@ -67,7 +67,7 @@ export const ALL_PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 export const ALL_PROCESS_TYPES: ProcessType[] = [
   'Plating',
-  'Dying',
+  'Dyeing',
   'Purchase',
   'Wrapping',
   'Jaipur Ordered',
@@ -79,7 +79,7 @@ export const ALL_PROCESS_TYPES: ProcessType[] = [
 // SLA days for each process type
 export const PROCESS_SLA: Record<ProcessType, number> = {
   'Plating': 3,
-  'Dying': 2,
+  'Dyeing': 2,
   'Purchase': 1,
   'Wrapping': 3,
   'Jaipur Ordered': 3,
@@ -87,5 +87,10 @@ export const PROCESS_SLA: Record<ProcessType, number> = {
   'China Ordered': 7,
   'Waiting for Approval': 1,
 };
+
+// Process types that are "In Process" (in-house work)
+// vs "Ordered" (waiting for external delivery)
+export const IN_PROCESS_TYPES: ProcessType[] = ['Plating', 'Dyeing', 'Wrapping'];
+export const ORDERED_TYPES: ProcessType[] = ['Purchase', 'Jaipur Ordered', 'US Ordered', 'China Ordered', 'Waiting for Approval'];
 
 export const UNITS = ['pcs', 'grams', 'meters', 'sets', 'pairs', 'kg', 'lots'];

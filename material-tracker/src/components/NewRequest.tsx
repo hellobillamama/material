@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MaterialRequest, Priority, ProcessType, ALL_PRIORITIES, ALL_PROCESS_TYPES, PROCESS_SLA, UNITS } from "@/lib/types";
+import { MaterialRequest, Priority, ProcessType, ALL_PRIORITIES, ALL_PROCESS_TYPES, PROCESS_SLA, IN_PROCESS_TYPES, UNITS } from "@/lib/types";
 import { createRequestLocal } from "@/lib/local-storage";
 import { generateRequestId, calculateSLADate } from "@/lib/utils";
 import { HiCamera, HiCheck, HiClock } from "react-icons/hi";
@@ -73,7 +73,7 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
       sent_to: "",
       expected_return_date: expectedDate,
       priority: form.priority,
-      status: "Ordered",
+      status: IN_PROCESS_TYPES.includes(form.process_type) ? "In Process" : "Ordered",
       remarks: form.remarks,
       created_at: now,
       updated_at: now,

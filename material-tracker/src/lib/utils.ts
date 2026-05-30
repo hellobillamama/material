@@ -33,7 +33,7 @@ export function getPriorityColor(priority: Priority): string {
 export function getProcessTypeColor(processType: ProcessType): string {
   const colors: Record<ProcessType, string> = {
     'Plating': 'bg-purple-100 text-purple-800',
-    'Dying': 'bg-pink-100 text-pink-800',
+    'Dyeing': 'bg-pink-100 text-pink-800',
     'Purchase': 'bg-green-100 text-green-800',
     'Wrapping': 'bg-teal-100 text-teal-800',
     'Jaipur Ordered': 'bg-amber-100 text-amber-800',

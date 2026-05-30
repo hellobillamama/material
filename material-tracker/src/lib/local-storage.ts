@@ -83,7 +83,7 @@ export function seedDemoData(): void {
       request_id: 'MR-003',
       request_date: yesterday.split('T')[0],
       material_name: 'Silver Sheet',
-      process_type: 'Dying',
+      process_type: 'Dyeing',
       quantity: 100,
       unit: 'grams',
       image_url: '',
