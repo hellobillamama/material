@@ -1,209 +1,117 @@
 /**
- * Google Sheets Database Layer
+ * Google Sheets Database Layer (Client-Side)
  * 
- * SETUP INSTRUCTIONS:
- * 1. Create a Google Sheet with 3 tabs: "MaterialRequests", "StatusHistory", "Vendors"
- * 2. Create a Google Cloud project and enable Google Sheets API
- * 3. Create a service account and download the JSON key
- * 4. Share the Google Sheet with the service account email
- * 5. Set environment variables in .env.local:
- *    - GOOGLE_SHEET_ID=your_sheet_id
- *    - GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account_email
- *    - GOOGLE_PRIVATE_KEY=your_private_key
+ * Uses Google Apps Script Web App as a proxy for read/write.
+ * This is the SIMPLEST way to connect — no service account, no OAuth.
+ * 
+ * ============ SETUP (5 minutes) ============
+ * 
+ * STEP 1: Create Google Sheet
+ *   - Go to https://sheets.google.com → Create new spreadsheet
+ *   - Name it: "Material Tracker Database"
+ *   - Create 3 tabs (sheets) at the bottom:
+ *     Tab 1: "MaterialRequests"
+ *     Tab 2: "StatusHistory"  
+ *     Tab 3: "Vendors"
+ *   - In "MaterialRequests" tab, add Row 1 headers:
+ *     A1: request_id | B1: request_date | C1: material_name | D1: process_type |
+ *     E1: quantity | F1: unit | G1: image_url | H1: requested_by | I1: department |
+ *     J1: approved_by | K1: current_holder | L1: sent_to | M1: expected_return_date |
+ *     N1: priority | O1: status | P1: remarks | Q1: created_at | R1: updated_at
+ *   - In "StatusHistory" tab, add Row 1 headers:
+ *     A1: history_id | B1: request_id | C1: old_status | D1: new_status |
+ *     E1: updated_by | F1: update_time | G1: comments
+ * 
+ * STEP 2: Add Google Apps Script
+ *   - In your Google Sheet, go to Extensions → Apps Script
+ *   - Delete the default code and paste the code from APPS_SCRIPT_CODE below
+ *   - Click "Deploy" → "New Deployment"
+ *   - Type: "Web app"
+ *   - Execute as: "Me"
+ *   - Who has access: "Anyone"
+ *   - Click "Deploy" and copy the Web App URL
+ * 
+ * STEP 3: Set Environment Variable
+ *   - Create file: .env.local
+ *   - Add: NEXT_PUBLIC_GOOGLE_SCRIPT_URL=https://script.google.com/macros/s/YOUR_ID/exec
+ * 
+ * That's it! The app will now read/write to your Google Sheet.
+ * ============================================
  */
 
-import { MaterialRequest, StatusHistory, Vendor, Status, ProcessType } from './types';
+import { MaterialRequest, StatusHistory, Status, ProcessType } from './types';
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID || '';
-const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
-const PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+const SCRIPT_URL = process.env.NEXT_PUBLIC_GOOGLE_SCRIPT_URL || '';
 
-const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
-
-async function getAccessToken(): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const payload = {
-    iss: SERVICE_ACCOUNT_EMAIL,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now,
-  };
-
-  const encode = (obj: object) =>
-    Buffer.from(JSON.stringify(obj)).toString('base64url');
-
-  const unsignedToken = `${encode(header)}.${encode(payload)}`;
-
-  const crypto = await import('crypto');
-  const sign = crypto.createSign('RSA-SHA256');
-  sign.update(unsignedToken);
-  const signature = sign.sign(PRIVATE_KEY, 'base64url');
-
-  const jwt = `${unsignedToken}.${signature}`;
-
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  const data = await response.json();
-  return data.access_token;
+export function isGoogleSheetsConfigured(): boolean {
+  return !!SCRIPT_URL;
 }
 
-async function getSheetData(range: string): Promise<string[][]> {
-  const token = await getAccessToken();
-  const url = `${SHEETS_API}/${SHEET_ID}/values/${encodeURIComponent(range)}`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await response.json();
-  return data.values || [];
-}
+// ============ API CALLS ============
 
-async function appendSheetData(range: string, values: string[][]): Promise<void> {
-  const token = await getAccessToken();
-  const url = `${SHEETS_API}/${SHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
-  await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ values }),
-  });
+async function callScript(action: string, data?: Record<string, unknown>): Promise<unknown> {
+  const params = new URLSearchParams({ action, ...data as Record<string, string> });
+  
+  if (action === 'read' || action === 'getAll' || action === 'search' || action === 'getHistory') {
+    const response = await fetch(`${SCRIPT_URL}?${params.toString()}`, {
+      method: 'GET',
+    });
+    return response.json();
+  } else {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    return response.json();
+  }
 }
-
-async function updateSheetData(range: string, values: string[][]): Promise<void> {
-  const token = await getAccessToken();
-  const url = `${SHEETS_API}/${SHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
-  await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ values }),
-  });
-}
-
 
 // ============ MATERIAL REQUESTS ============
 
-function rowToMaterialRequest(row: string[]): MaterialRequest {
-  return {
-    request_id: row[0] || '',
-    request_date: row[1] || '',
-    material_name: row[2] || '',
-    process_type: (row[3] as ProcessType) || 'Plating',
-    quantity: Number(row[4]) || 0,
-    unit: row[5] || '',
-    image_url: row[6] || '',
-    requested_by: row[7] || '',
-    department: row[8] || '',
-    approved_by: row[9] || '',
-    current_holder: row[10] || '',
-    sent_to: row[11] || '',
-    expected_return_date: row[12] || '',
-    priority: (row[13] as MaterialRequest['priority']) || 'Medium',
-    status: (row[14] as Status) || 'Ordered',
-    remarks: row[15] || '',
-    created_at: row[16] || '',
-    updated_at: row[17] || '',
-  };
+export async function getAllRequestsFromSheet(): Promise<MaterialRequest[]> {
+  try {
+    const result = await callScript('getAll', { sheet: 'MaterialRequests' }) as { data: MaterialRequest[] };
+    return result.data || [];
+  } catch (e) {
+    console.error('Failed to fetch from Google Sheets:', e);
+    return [];
+  }
 }
 
-function materialRequestToRow(req: MaterialRequest): string[] {
-  return [
-    req.request_id,
-    req.request_date,
-    req.material_name,
-    req.process_type,
-    String(req.quantity),
-    req.unit,
-    req.image_url,
-    req.requested_by,
-    req.department,
-    req.approved_by,
-    req.current_holder,
-    req.sent_to,
-    req.expected_return_date,
-    req.priority,
-    req.status,
-    req.remarks,
-    req.created_at,
-    req.updated_at,
-  ];
+export async function createRequestInSheet(req: MaterialRequest): Promise<void> {
+  await callScript('create', {
+    sheet: 'MaterialRequests',
+    data: JSON.stringify(req),
+  });
 }
 
-export async function getAllRequests(): Promise<MaterialRequest[]> {
-  const rows = await getSheetData('MaterialRequests!A2:R');
-  return rows.map(rowToMaterialRequest);
-}
-
-export async function getRequestById(id: string): Promise<MaterialRequest | null> {
-  const requests = await getAllRequests();
-  return requests.find((r) => r.request_id === id) || null;
-}
-
-export async function createRequest(req: MaterialRequest): Promise<void> {
-  await appendSheetData('MaterialRequests!A:R', [materialRequestToRow(req)]);
-}
-
-export async function updateRequest(req: MaterialRequest): Promise<void> {
-  const rows = await getSheetData('MaterialRequests!A:A');
-  const rowIndex = rows.findIndex((r) => r[0] === req.request_id);
-  if (rowIndex === -1) return;
-  const sheetRow = rowIndex + 1;
-  await updateSheetData(
-    `MaterialRequests!A${sheetRow}:R${sheetRow}`,
-    [materialRequestToRow(req)]
-  );
+export async function updateRequestInSheet(req: MaterialRequest): Promise<void> {
+  await callScript('update', {
+    sheet: 'MaterialRequests',
+    id: req.request_id,
+    data: JSON.stringify(req),
+  });
 }
 
 // ============ STATUS HISTORY ============
 
-function rowToStatusHistory(row: string[]): StatusHistory {
-  return {
-    history_id: row[0] || '',
-    request_id: row[1] || '',
-    old_status: (row[2] as StatusHistory['old_status']) || '',
-    new_status: (row[3] as Status) || 'Ordered',
-    updated_by: row[4] || '',
-    update_time: row[5] || '',
-    comments: row[6] || '',
-  };
+export async function getHistoryFromSheet(requestId: string): Promise<StatusHistory[]> {
+  try {
+    const result = await callScript('getHistory', {
+      sheet: 'StatusHistory',
+      requestId,
+    }) as { data: StatusHistory[] };
+    return result.data || [];
+  } catch (e) {
+    console.error('Failed to fetch history:', e);
+    return [];
+  }
 }
 
-function statusHistoryToRow(h: StatusHistory): string[] {
-  return [h.history_id, h.request_id, h.old_status, h.new_status, h.updated_by, h.update_time, h.comments];
-}
-
-export async function getHistoryByRequestId(requestId: string): Promise<StatusHistory[]> {
-  const rows = await getSheetData('StatusHistory!A2:G');
-  return rows.map(rowToStatusHistory).filter((h) => h.request_id === requestId);
-}
-
-export async function addStatusHistory(history: StatusHistory): Promise<void> {
-  await appendSheetData('StatusHistory!A:G', [statusHistoryToRow(history)]);
-}
-
-// ============ VENDORS ============
-
-function rowToVendor(row: string[]): Vendor {
-  return {
-    vendor_id: row[0] || '',
-    vendor_name: row[1] || '',
-    type: row[2] || '',
-    contact_person: row[3] || '',
-    mobile_number: row[4] || '',
-    address: row[5] || '',
-  };
-}
-
-export async function getAllVendors(): Promise<Vendor[]> {
-  const rows = await getSheetData('Vendors!A2:F');
-  return rows.map(rowToVendor);
+export async function addHistoryToSheet(entry: StatusHistory): Promise<void> {
+  await callScript('create', {
+    sheet: 'StatusHistory',
+    data: JSON.stringify(entry),
+  });
 }

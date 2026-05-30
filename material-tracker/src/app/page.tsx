@@ -8,7 +8,8 @@ import Pending from "@/components/Pending";
 import Closed from "@/components/Closed";
 import Search from "@/components/Search";
 import RequestDetail from "@/components/RequestDetail";
-import { seedDemoData } from "@/lib/local-storage";
+import { seedDemoData, syncFromGoogleSheets } from "@/lib/local-storage";
+import { isGoogleSheetsConfigured } from "@/lib/sheets";
 
 type Tab = "home" | "new" | "pending" | "search" | "closed";
 
@@ -19,7 +20,19 @@ export default function Home() {
   const [pendingFilter, setPendingFilter] = useState<string>("all");
 
   useEffect(() => {
-    seedDemoData();
+    // If Google Sheets is configured, sync from it
+    if (isGoogleSheetsConfigured()) {
+      syncFromGoogleSheets().then((synced) => {
+        if (!synced) {
+          // Fallback to demo data if sync fails
+          seedDemoData();
+        }
+        refresh();
+      });
+    } else {
+      // No Google Sheets — use local demo data
+      seedDemoData();
+    }
   }, []);
 
   const refresh = () => setRefreshKey((k) => k + 1);

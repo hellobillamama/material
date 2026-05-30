@@ -1,9 +1,12 @@
 /**
- * Local Storage Database Layer
- * Works as a fully functional local database using browser localStorage.
+ * Local Storage Database Layer + Google Sheets Sync
+ * 
+ * Works locally with localStorage for instant speed.
+ * When Google Sheets is configured, also syncs data to the sheet.
  */
 
 import { MaterialRequest, StatusHistory, Vendor, Status, ProcessType, PROCESS_SLA } from './types';
+import { isGoogleSheetsConfigured, getAllRequestsFromSheet, createRequestInSheet, updateRequestInSheet, addHistoryToSheet, getHistoryFromSheet } from './sheets';
 
 const STORAGE_KEYS = {
   REQUESTS: 'material_tracker_requests',
@@ -221,6 +224,11 @@ export function createRequestLocal(req: MaterialRequest): void {
   const requests = getAllRequestsLocal();
   requests.push(req);
   saveToStorage(STORAGE_KEYS.REQUESTS, requests);
+
+  // Sync to Google Sheets in background
+  if (isGoogleSheetsConfigured()) {
+    createRequestInSheet(req).catch(console.error);
+  }
 }
 
 export function updateRequestLocal(req: MaterialRequest): void {
@@ -229,6 +237,11 @@ export function updateRequestLocal(req: MaterialRequest): void {
   if (index !== -1) {
     requests[index] = req;
     saveToStorage(STORAGE_KEYS.REQUESTS, requests);
+  }
+
+  // Sync to Google Sheets in background
+  if (isGoogleSheetsConfigured()) {
+    updateRequestInSheet(req).catch(console.error);
   }
 }
 
@@ -243,6 +256,11 @@ export function addStatusHistoryLocal(entry: StatusHistory): void {
   const history = getFromStorage<StatusHistory>(STORAGE_KEYS.HISTORY);
   history.push(entry);
   saveToStorage(STORAGE_KEYS.HISTORY, history);
+
+  // Sync to Google Sheets in background
+  if (isGoogleSheetsConfigured()) {
+    addHistoryToSheet(entry).catch(console.error);
+  }
 }
 
 // ============ VENDORS ============
@@ -316,4 +334,25 @@ export function getClosedRequestsLocal(): MaterialRequest[] {
   return requests
     .filter((r) => r.status === 'Closed')
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+}
+
+// ============ SYNC WITH GOOGLE SHEETS ============
+
+/**
+ * Pull all data from Google Sheets and replace local storage.
+ * Call this on app load to get latest data from all devices.
+ */
+export async function syncFromGoogleSheets(): Promise<boolean> {
+  if (!isGoogleSheetsConfigured()) return false;
+
+  try {
+    const requests = await getAllRequestsFromSheet();
+    if (requests.length > 0) {
+      saveToStorage(STORAGE_KEYS.REQUESTS, requests);
+    }
+    return true;
+  } catch (e) {
+    console.error('Sync from Google Sheets failed:', e);
+    return false;
+  }
 }
