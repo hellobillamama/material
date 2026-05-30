@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { MaterialRequest, Priority, Department, ALL_PRIORITIES, ALL_DEPARTMENTS, UNITS, MATERIAL_CATEGORIES } from "@/lib/types";
+import { MaterialRequest, Priority, ProcessType, ALL_PRIORITIES, ALL_PROCESS_TYPES, PROCESS_SLA, UNITS } from "@/lib/types";
 import { createRequestLocal } from "@/lib/local-storage";
-import { generateRequestId } from "@/lib/utils";
-import { HiCamera, HiCheck } from "react-icons/hi";
+import { generateRequestId, calculateSLADate } from "@/lib/utils";
+import { HiCamera, HiCheck, HiClock } from "react-icons/hi";
 
 interface NewRequestProps {
   onSuccess: () => void;
@@ -12,27 +12,23 @@ interface NewRequestProps {
 
 export default function NewRequest({ onSuccess }: NewRequestProps) {
   const [form, setForm] = useState<{
-    style_code: string;
     material_name: string;
-    material_category: string;
+    process_type: ProcessType;
     quantity: string;
     unit: string;
     priority: Priority;
     requested_by: string;
-    department: Department;
-    expected_return_date: string;
+    department: string;
     remarks: string;
     image_url: string;
   }>({
-    style_code: "",
     material_name: "",
-    material_category: "Gold",
+    process_type: "Plating",
     quantity: "",
     unit: "pcs",
     priority: "Medium",
     requested_by: "",
-    department: "Designer",
-    expected_return_date: "",
+    department: "",
     remarks: "",
     image_url: "",
   });
@@ -55,17 +51,18 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.style_code || !form.material_name || !form.requested_by) return;
+    if (!form.material_name || !form.requested_by) return;
 
     setSubmitting(true);
 
     const now = new Date().toISOString();
+    const expectedDate = calculateSLADate(form.process_type);
+
     const request: MaterialRequest = {
       request_id: generateRequestId(),
       request_date: now.split("T")[0],
-      style_code: form.style_code,
       material_name: form.material_name,
-      material_category: form.material_category,
+      process_type: form.process_type,
       quantity: Number(form.quantity) || 0,
       unit: form.unit,
       image_url: form.image_url,
@@ -74,9 +71,9 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
       approved_by: "",
       current_holder: form.requested_by,
       sent_to: "",
-      expected_return_date: form.expected_return_date,
+      expected_return_date: expectedDate,
       priority: form.priority,
-      status: "Requested",
+      status: "Ordered",
       remarks: form.remarks,
       created_at: now,
       updated_at: now,
@@ -101,6 +98,8 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
       </div>
     );
   }
+
+  const slaDays = PROCESS_SLA[form.process_type];
 
   return (
     <div className="px-4 pt-6 pb-4">
@@ -144,21 +143,6 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
           </label>
         </div>
 
-        {/* Style Code */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Style Code *
-          </label>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="e.g. JW-2024-A1"
-            value={form.style_code}
-            onChange={(e) => setForm({ ...form, style_code: e.target.value })}
-            required
-          />
-        </div>
-
         {/* Material Name */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -174,20 +158,29 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
           />
         </div>
 
-        {/* Category */}
+        {/* Process Type with SLA indicator */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Category
+            Process Type
           </label>
           <select
             className="input-field"
-            value={form.material_category}
-            onChange={(e) => setForm({ ...form, material_category: e.target.value })}
+            value={form.process_type}
+            onChange={(e) => setForm({ ...form, process_type: e.target.value as ProcessType })}
           >
-            {MATERIAL_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
+            {ALL_PROCESS_TYPES.map((pt) => (
+              <option key={pt} value={pt}>
+                {pt} ({PROCESS_SLA[pt]} day{PROCESS_SLA[pt] > 1 ? 's' : ''} SLA)
+              </option>
             ))}
           </select>
+          {/* SLA Timer Display */}
+          <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
+            <HiClock size={16} className="text-blue-600" />
+            <span className="text-sm text-blue-700 font-medium">
+              SLA: {slaDays} day{slaDays > 1 ? 's' : ''} — Due by {calculateSLADate(form.process_type)}
+            </span>
+          </div>
         </div>
 
         {/* Quantity + Unit */}
@@ -264,32 +257,17 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
           />
         </div>
 
-        {/* Department */}
+        {/* Department - Free text */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Department
           </label>
-          <select
-            className="input-field"
-            value={form.department}
-            onChange={(e) => setForm({ ...form, department: e.target.value as Department })}
-          >
-            {ALL_DEPARTMENTS.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Expected Return Date */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Expected Return Date
-          </label>
           <input
-            type="date"
+            type="text"
             className="input-field"
-            value={form.expected_return_date}
-            onChange={(e) => setForm({ ...form, expected_return_date: e.target.value })}
+            placeholder="e.g. Design, Store, QC, Production"
+            value={form.department}
+            onChange={(e) => setForm({ ...form, department: e.target.value })}
           />
         </div>
 
@@ -310,7 +288,7 @@ export default function NewRequest({ onSuccess }: NewRequestProps) {
         {/* Submit */}
         <button
           type="submit"
-          disabled={submitting || !form.style_code || !form.material_name || !form.requested_by}
+          disabled={submitting || !form.material_name || !form.requested_by}
           className="btn-primary w-full text-base py-4 mt-2"
         >
           {submitting ? "Creating..." : "Create Request"}

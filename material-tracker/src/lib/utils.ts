@@ -1,4 +1,4 @@
-import { Status, Priority } from './types';
+import { Status, Priority, ProcessType, PROCESS_SLA } from './types';
 
 export function generateRequestId(): string {
   const now = new Date();
@@ -12,15 +12,9 @@ export function generateHistoryId(): string {
 
 export function getStatusColor(status: Status): string {
   const colors: Record<Status, string> = {
-    'Requested': 'bg-blue-100 text-blue-800',
-    'Approved': 'bg-green-100 text-green-800',
-    'In Store': 'bg-gray-100 text-gray-800',
-    'Sent to Karigar': 'bg-orange-100 text-orange-800',
-    'Sent for Plating': 'bg-purple-100 text-purple-800',
-    'In QC': 'bg-indigo-100 text-indigo-800',
-    'Received Back': 'bg-emerald-100 text-emerald-800',
-    'Delayed': 'bg-red-100 text-red-800',
-    'Missing': 'bg-red-200 text-red-900',
+    'Ordered': 'bg-blue-100 text-blue-800',
+    'In Process': 'bg-orange-100 text-orange-800',
+    'Received': 'bg-emerald-100 text-emerald-800',
     'Closed': 'bg-gray-200 text-gray-600',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';
@@ -34,6 +28,20 @@ export function getPriorityColor(priority: Priority): string {
     'Urgent': 'bg-red-100 text-red-800',
   };
   return colors[priority] || 'bg-gray-100 text-gray-800';
+}
+
+export function getProcessTypeColor(processType: ProcessType): string {
+  const colors: Record<ProcessType, string> = {
+    'Plating': 'bg-purple-100 text-purple-800',
+    'Dying': 'bg-pink-100 text-pink-800',
+    'Purchase': 'bg-green-100 text-green-800',
+    'Wrapping': 'bg-teal-100 text-teal-800',
+    'Jaipur Ordered': 'bg-amber-100 text-amber-800',
+    'US Ordered': 'bg-indigo-100 text-indigo-800',
+    'China Ordered': 'bg-rose-100 text-rose-800',
+    'Waiting for Approval': 'bg-sky-100 text-sky-800',
+  };
+  return colors[processType] || 'bg-gray-100 text-gray-800';
 }
 
 export function formatDate(dateStr: string): string {
@@ -59,7 +67,7 @@ export function formatDateTime(dateStr: string): string {
 }
 
 export function isDelayed(expectedDate: string, status: Status): boolean {
-  if (!expectedDate || ['Received Back', 'Closed'].includes(status)) return false;
+  if (!expectedDate || ['Received', 'Closed'].includes(status)) return false;
   return new Date(expectedDate) < new Date();
 }
 
@@ -77,4 +85,38 @@ export function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
   return formatDate(dateStr);
+}
+
+/**
+ * Calculate expected return date based on process type SLA
+ */
+export function calculateSLADate(processType: ProcessType): string {
+  const slaDays = PROCESS_SLA[processType];
+  const date = new Date();
+  date.setDate(date.getDate() + slaDays);
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * Get remaining SLA time as text
+ */
+export function getSLARemaining(expectedDate: string, status: Status): { text: string; isOverdue: boolean } {
+  if (!expectedDate || ['Received', 'Closed'].includes(status)) {
+    return { text: '', isOverdue: false };
+  }
+  
+  const now = new Date();
+  const due = new Date(expectedDate);
+  const diffMs = due.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / 86400000);
+
+  if (diffDays < 0) {
+    return { text: `${Math.abs(diffDays)}d overdue`, isOverdue: true };
+  } else if (diffDays === 0) {
+    return { text: 'Due today', isOverdue: false };
+  } else if (diffDays === 1) {
+    return { text: '1 day left', isOverdue: false };
+  } else {
+    return { text: `${diffDays} days left`, isOverdue: false };
+  }
 }

@@ -3,29 +3,28 @@
 import { useEffect, useState } from "react";
 import { getDashboardStatsLocal } from "@/lib/local-storage";
 import { MaterialRequest } from "@/lib/types";
-import { getStatusColor, formatDate, isDelayed, timeAgo } from "@/lib/utils";
-import { HiClock, HiExclamation, HiQuestionMarkCircle, HiUserGroup, HiColorSwatch } from "react-icons/hi";
+import { getStatusColor, getPriorityColor, getProcessTypeColor, isDelayed, timeAgo, getSLARemaining } from "@/lib/utils";
+import { HiClock, HiExclamation, HiTruck, HiCog } from "react-icons/hi";
 
 interface DashboardProps {
   onOpenRequest: (id: string) => void;
+  onFilterByStatus: (status: string) => void;
 }
 
 interface Stats {
   totalPending: number;
   delayed: number;
-  missing: number;
-  withKarigar: number;
-  forPlating: number;
+  ordered: number;
+  inProcess: number;
   recentUpdates: MaterialRequest[];
 }
 
-export default function Dashboard({ onOpenRequest }: DashboardProps) {
+export default function Dashboard({ onOpenRequest, onFilterByStatus }: DashboardProps) {
   const [stats, setStats] = useState<Stats>({
     totalPending: 0,
     delayed: 0,
-    missing: 0,
-    withKarigar: 0,
-    forPlating: 0,
+    ordered: 0,
+    inProcess: 0,
     recentUpdates: [],
   });
 
@@ -41,6 +40,7 @@ export default function Dashboard({ onOpenRequest }: DashboardProps) {
       icon: <HiClock size={20} />,
       color: "bg-blue-50 text-blue-600",
       borderColor: "border-blue-200",
+      filterStatus: "all",
     },
     {
       label: "Delayed",
@@ -48,27 +48,23 @@ export default function Dashboard({ onOpenRequest }: DashboardProps) {
       icon: <HiExclamation size={20} />,
       color: "bg-red-50 text-red-600",
       borderColor: "border-red-200",
+      filterStatus: "delayed",
     },
     {
-      label: "Missing",
-      value: stats.missing,
-      icon: <HiQuestionMarkCircle size={20} />,
-      color: "bg-red-50 text-red-700",
-      borderColor: "border-red-300",
-    },
-    {
-      label: "With Karigar",
-      value: stats.withKarigar,
-      icon: <HiUserGroup size={20} />,
+      label: "Ordered",
+      value: stats.ordered,
+      icon: <HiTruck size={20} />,
       color: "bg-orange-50 text-orange-600",
       borderColor: "border-orange-200",
+      filterStatus: "Ordered",
     },
     {
-      label: "Plating",
-      value: stats.forPlating,
-      icon: <HiColorSwatch size={20} />,
+      label: "In Process",
+      value: stats.inProcess,
+      icon: <HiCog size={20} />,
       color: "bg-purple-50 text-purple-600",
       borderColor: "border-purple-200",
+      filterStatus: "In Process",
     },
   ];
 
@@ -80,23 +76,24 @@ export default function Dashboard({ onOpenRequest }: DashboardProps) {
         <p className="text-sm text-gray-500 mt-1">Dashboard Overview</p>
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Clickable */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         {statCards.map((card) => (
-          <div
+          <button
             key={card.label}
-            className={`card border ${card.borderColor} ${card.color} flex items-center gap-3`}
+            onClick={() => onFilterByStatus(card.filterStatus)}
+            className={`card border ${card.borderColor} ${card.color} flex items-center gap-3 w-full text-left active:scale-95 transition-transform`}
           >
             <div className="p-2 rounded-lg bg-white/60">{card.icon}</div>
             <div>
               <p className="text-2xl font-bold">{card.value}</p>
               <p className="text-xs opacity-80">{card.label}</p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
-      {/* Recent Updates */}
+      {/* Recent Updates - Only pending items, priority on top */}
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-gray-900 mb-3">
           Recent Updates
@@ -104,46 +101,59 @@ export default function Dashboard({ onOpenRequest }: DashboardProps) {
         <div className="space-y-2">
           {stats.recentUpdates.length === 0 ? (
             <div className="card text-center py-8 text-gray-400">
-              <p>No requests yet</p>
+              <p>No pending requests</p>
               <p className="text-sm mt-1">Create your first material request</p>
             </div>
           ) : (
-            stats.recentUpdates.map((req) => (
-              <button
-                key={req.request_id}
-                onClick={() => onOpenRequest(req.request_id)}
-                className={`card w-full text-left active:bg-gray-50 transition-colors ${
-                  isDelayed(req.expected_return_date, req.status)
-                    ? "border-red-200 bg-red-50/30"
-                    : ""
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-gray-900 truncate">
-                        {req.material_name}
-                      </span>
-                      {isDelayed(req.expected_return_date, req.status) && (
-                        <span className="text-red-500 text-xs font-medium">DELAYED</span>
-                      )}
+            stats.recentUpdates.map((req) => {
+              const sla = getSLARemaining(req.expected_return_date, req.status);
+              return (
+                <button
+                  key={req.request_id}
+                  onClick={() => onOpenRequest(req.request_id)}
+                  className={`card w-full text-left active:bg-gray-50 transition-colors ${
+                    isDelayed(req.expected_return_date, req.status)
+                      ? "border-red-200 bg-red-50/30"
+                      : ""
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0 mr-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-gray-900 truncate">
+                          {req.material_name}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {req.process_type} &bull; {req.quantity} {req.unit}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {req.style_code} &bull; {req.request_id}
-                    </p>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`status-badge ${getStatusColor(req.status)}`}>
+                        {req.status}
+                      </span>
+                      <span className={`status-badge ${getPriorityColor(req.priority)}`}>
+                        {req.priority}
+                      </span>
+                    </div>
                   </div>
-                  <span className={`status-badge ${getStatusColor(req.status)}`}>
-                    {req.status}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-xs text-gray-400">
-                  <span>
-                    {req.current_holder ? `With: ${req.current_holder}` : `By: ${req.requested_by}`}
-                  </span>
-                  <span>{timeAgo(req.updated_at)}</span>
-                </div>
-              </button>
-            ))
+                  <div className="flex justify-between items-center text-xs text-gray-400">
+                    <span>
+                      {req.current_holder ? `📍 ${req.current_holder}` : `By: ${req.requested_by}`}
+                    </span>
+                    <span>
+                      {sla.isOverdue ? (
+                        <span className="text-red-500 font-medium">⚠️ {sla.text}</span>
+                      ) : sla.text ? (
+                        <span className="text-gray-500">⏱ {sla.text}</span>
+                      ) : (
+                        timeAgo(req.updated_at)
+                      )}
+                    </span>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
       </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { searchRequestsLocal } from "@/lib/local-storage";
 import { MaterialRequest } from "@/lib/types";
-import { getStatusColor, isDelayed, timeAgo } from "@/lib/utils";
+import { getStatusColor, isDelayed, timeAgo, getSLARemaining } from "@/lib/utils";
 import { HiSearch, HiX } from "react-icons/hi";
 
 interface SearchProps {
@@ -17,7 +17,6 @@ export default function Search({ onOpenRequest }: SearchProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Auto-focus search input
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
@@ -28,7 +27,6 @@ export default function Search({ onOpenRequest }: SearchProps) {
       return;
     }
 
-    // Debounce search
     const timer = setTimeout(() => {
       const found = searchRequestsLocal(query.trim());
       setResults(found);
@@ -56,7 +54,7 @@ export default function Search({ onOpenRequest }: SearchProps) {
           ref={inputRef}
           type="text"
           className="input-field pl-11 pr-10"
-          placeholder="Search style code, material, name..."
+          placeholder="Search material, process, name..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -77,7 +75,7 @@ export default function Search({ onOpenRequest }: SearchProps) {
             Quick Search
           </p>
           <div className="flex flex-wrap gap-2">
-            {["Gold", "Diamond", "Karigar", "Plating", "MR-"].map((term) => (
+            {["Plating", "Dying", "Purchase", "Ordered", "In Process", "MR-"].map((term) => (
               <button
                 key={term}
                 onClick={() => setQuery(term)}
@@ -103,39 +101,48 @@ export default function Search({ onOpenRequest }: SearchProps) {
                 <p className="text-sm mt-1">Try a different search term</p>
               </div>
             ) : (
-              results.map((req) => (
-                <button
-                  key={req.request_id}
-                  onClick={() => onOpenRequest(req.request_id)}
-                  className={`card w-full text-left active:bg-gray-50 transition-colors ${
-                    isDelayed(req.expected_return_date, req.status)
-                      ? "border-red-200 bg-red-50/30"
-                      : ""
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1 min-w-0 mr-2">
-                      <p className="font-semibold text-sm text-gray-900 truncate">
-                        {req.material_name}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {req.style_code} &bull; {req.request_id}
-                      </p>
+              results.map((req) => {
+                const sla = getSLARemaining(req.expected_return_date, req.status);
+                return (
+                  <button
+                    key={req.request_id}
+                    onClick={() => onOpenRequest(req.request_id)}
+                    className={`card w-full text-left active:bg-gray-50 transition-colors ${
+                      isDelayed(req.expected_return_date, req.status)
+                        ? "border-red-200 bg-red-50/30"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1 min-w-0 mr-2">
+                        <p className="font-semibold text-sm text-gray-900 truncate">
+                          {req.material_name}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {req.process_type} &bull; {req.request_id}
+                        </p>
+                      </div>
+                      <span className={`status-badge ${getStatusColor(req.status)}`}>
+                        {req.status}
+                      </span>
                     </div>
-                    <span className={`status-badge ${getStatusColor(req.status)}`}>
-                      {req.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gray-400">
-                    <span>
-                      {req.current_holder
-                        ? `📍 ${req.current_holder}`
-                        : `By: ${req.requested_by}`}
-                    </span>
-                    <span>{timeAgo(req.updated_at)}</span>
-                  </div>
-                </button>
-              ))
+                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <span>
+                        {req.current_holder
+                          ? `📍 ${req.current_holder}`
+                          : `By: ${req.requested_by}`}
+                      </span>
+                      <span>
+                        {sla.isOverdue ? (
+                          <span className="text-red-500 font-medium">⚠️ {sla.text}</span>
+                        ) : (
+                          timeAgo(req.updated_at)
+                        )}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>

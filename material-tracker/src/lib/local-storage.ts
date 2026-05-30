@@ -1,12 +1,9 @@
 /**
- * Local Storage Database Layer (Demo/Fallback)
- * 
- * This works as a fully functional local database using browser localStorage.
- * Perfect for demo and testing without Google Sheets setup.
- * Switch to Google Sheets in production by setting environment variables.
+ * Local Storage Database Layer
+ * Works as a fully functional local database using browser localStorage.
  */
 
-import { MaterialRequest, StatusHistory, Vendor, Status } from './types';
+import { MaterialRequest, StatusHistory, Vendor, Status, ProcessType, PROCESS_SLA } from './types';
 
 const STORAGE_KEYS = {
   REQUESTS: 'material_tracker_requests',
@@ -31,9 +28,9 @@ function saveToStorage<T>(key: string, data: T[]): void {
 
 export function seedDemoData(): void {
   if (typeof window === 'undefined') return;
-  
+
   const existing = localStorage.getItem(STORAGE_KEYS.REQUESTS);
-  if (existing) return; // Already seeded
+  if (existing) return;
 
   const now = new Date().toISOString();
   const yesterday = new Date(Date.now() - 86400000).toISOString();
@@ -45,20 +42,19 @@ export function seedDemoData(): void {
     {
       request_id: 'MR-001',
       request_date: threeDaysAgo.split('T')[0],
-      style_code: 'JW-2024-A1',
       material_name: 'Gold Wire 22K',
-      material_category: 'Gold',
+      process_type: 'Plating',
       quantity: 50,
       unit: 'grams',
       image_url: '',
       requested_by: 'Rahul Sharma',
-      department: 'Designer',
+      department: 'Design',
       approved_by: 'Amit Patel',
       current_holder: 'Ramesh Karigar',
       sent_to: 'Ramesh Karigar',
       expected_return_date: pastDate,
       priority: 'High',
-      status: 'Sent to Karigar',
+      status: 'In Process',
       remarks: 'Needed for wedding collection',
       created_at: threeDaysAgo,
       updated_at: yesterday,
@@ -66,20 +62,19 @@ export function seedDemoData(): void {
     {
       request_id: 'MR-002',
       request_date: twoDaysAgo.split('T')[0],
-      style_code: 'JW-2024-B3',
       material_name: 'Kundan Stones',
-      material_category: 'Kundan',
+      process_type: 'Jaipur Ordered',
       quantity: 200,
       unit: 'pcs',
       image_url: '',
       requested_by: 'Priya Singh',
-      department: 'Designer',
+      department: 'Store',
       approved_by: '',
       current_holder: 'Store',
       sent_to: '',
       expected_return_date: new Date(Date.now() + 259200000).toISOString().split('T')[0],
       priority: 'Medium',
-      status: 'Requested',
+      status: 'Ordered',
       remarks: 'For necklace set',
       created_at: twoDaysAgo,
       updated_at: twoDaysAgo,
@@ -87,20 +82,19 @@ export function seedDemoData(): void {
     {
       request_id: 'MR-003',
       request_date: yesterday.split('T')[0],
-      style_code: 'JW-2024-C7',
       material_name: 'Silver Sheet',
-      material_category: 'Silver',
+      process_type: 'Dying',
       quantity: 100,
       unit: 'grams',
       image_url: '',
       requested_by: 'Deepak Kumar',
-      department: 'Store',
+      department: 'Production',
       approved_by: 'Amit Patel',
       current_holder: 'Plating Unit',
       sent_to: 'Plating Unit',
       expected_return_date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
       priority: 'High',
-      status: 'Sent for Plating',
+      status: 'In Process',
       remarks: 'Rhodium plating needed',
       created_at: yesterday,
       updated_at: now,
@@ -108,44 +102,62 @@ export function seedDemoData(): void {
     {
       request_id: 'MR-004',
       request_date: threeDaysAgo.split('T')[0],
-      style_code: 'JW-2024-D2',
       material_name: 'Diamond Solitaire 0.5ct',
-      material_category: 'Diamond',
+      process_type: 'Purchase',
       quantity: 5,
       unit: 'pcs',
       image_url: '',
       requested_by: 'Rahul Sharma',
-      department: 'Designer',
+      department: 'Design',
       approved_by: 'Amit Patel',
       current_holder: '',
       sent_to: '',
       expected_return_date: pastDate,
       priority: 'Urgent',
-      status: 'Missing',
-      remarks: 'Cannot locate after Karigar returned',
+      status: 'Ordered',
+      remarks: 'Urgent purchase needed',
       created_at: threeDaysAgo,
       updated_at: yesterday,
     },
     {
       request_id: 'MR-005',
       request_date: now.split('T')[0],
-      style_code: 'JW-2024-E5',
       material_name: 'Pearl Strand AAA',
-      material_category: 'Pearl',
+      process_type: 'Wrapping',
       quantity: 10,
       unit: 'pcs',
       image_url: '',
       requested_by: 'Priya Singh',
-      department: 'Designer',
+      department: 'QC',
       approved_by: '',
       current_holder: 'QC Department',
       sent_to: 'QC Department',
       expected_return_date: new Date(Date.now() + 172800000).toISOString().split('T')[0],
       priority: 'Medium',
-      status: 'In QC',
+      status: 'In Process',
       remarks: 'Quality check before dispatch',
       created_at: now,
       updated_at: now,
+    },
+    {
+      request_id: 'MR-006',
+      request_date: threeDaysAgo.split('T')[0],
+      material_name: 'Polki Set',
+      process_type: 'Plating',
+      quantity: 1,
+      unit: 'sets',
+      image_url: '',
+      requested_by: 'Deepak Kumar',
+      department: 'Store',
+      approved_by: 'Amit Patel',
+      current_holder: 'Store',
+      sent_to: '',
+      expected_return_date: threeDaysAgo.split('T')[0],
+      priority: 'Low',
+      status: 'Closed',
+      remarks: 'Completed and returned',
+      created_at: threeDaysAgo,
+      updated_at: yesterday,
     },
   ];
 
@@ -154,7 +166,7 @@ export function seedDemoData(): void {
       history_id: 'H-001',
       request_id: 'MR-001',
       old_status: '',
-      new_status: 'Requested',
+      new_status: 'Ordered',
       updated_by: 'Rahul Sharma',
       update_time: threeDaysAgo,
       comments: 'New request created',
@@ -162,20 +174,11 @@ export function seedDemoData(): void {
     {
       history_id: 'H-002',
       request_id: 'MR-001',
-      old_status: 'Requested',
-      new_status: 'Approved',
+      old_status: 'Ordered',
+      new_status: 'In Process',
       updated_by: 'Amit Patel',
       update_time: twoDaysAgo,
-      comments: 'Approved for production',
-    },
-    {
-      history_id: 'H-003',
-      request_id: 'MR-001',
-      old_status: 'Approved',
-      new_status: 'Sent to Karigar',
-      updated_by: 'Store Manager',
-      update_time: yesterday,
-      comments: 'Sent to Ramesh Karigar',
+      comments: 'Sent for plating',
     },
   ];
 
@@ -254,29 +257,37 @@ export function getDashboardStatsLocal() {
   const requests = getAllRequestsLocal();
   const now = new Date();
 
-  const pending = requests.filter(
-    (r) => !['Received Back', 'Closed'].includes(r.status)
-  );
+  // Pending = everything NOT closed
+  const pending = requests.filter((r) => r.status !== 'Closed');
+
+  // Delayed = expected return date passed and not closed/received
   const delayed = requests.filter(
     (r) =>
       r.expected_return_date &&
       new Date(r.expected_return_date) < now &&
-      !['Received Back', 'Closed'].includes(r.status)
+      !['Received', 'Closed'].includes(r.status)
   );
-  const missing = requests.filter((r) => r.status === 'Missing');
-  const withKarigar = requests.filter((r) => r.status === 'Sent to Karigar');
-  const forPlating = requests.filter((r) => r.status === 'Sent for Plating');
-  const recent = [...requests]
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+  const ordered = requests.filter((r) => r.status === 'Ordered');
+  const inProcess = requests.filter((r) => r.status === 'In Process');
+
+  // Recent updates: only pending items (not closed), sorted by priority then date
+  const priorityOrder: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Low: 3 };
+  const recentPending = [...pending]
+    .sort((a, b) => {
+      const aPrio = priorityOrder[a.priority] ?? 2;
+      const bPrio = priorityOrder[b.priority] ?? 2;
+      if (aPrio !== bPrio) return aPrio - bPrio;
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    })
     .slice(0, 10);
 
   return {
     totalPending: pending.length,
     delayed: delayed.length,
-    missing: missing.length,
-    withKarigar: withKarigar.length,
-    forPlating: forPlating.length,
-    recentUpdates: recent,
+    ordered: ordered.length,
+    inProcess: inProcess.length,
+    recentUpdates: recentPending,
   };
 }
 
@@ -287,13 +298,22 @@ export function searchRequestsLocal(query: string): MaterialRequest[] {
   const q = query.toLowerCase();
   return requests.filter(
     (r) =>
-      r.style_code.toLowerCase().includes(q) ||
       r.material_name.toLowerCase().includes(q) ||
       r.request_id.toLowerCase().includes(q) ||
       r.requested_by.toLowerCase().includes(q) ||
       r.current_holder.toLowerCase().includes(q) ||
       r.department.toLowerCase().includes(q) ||
       r.remarks.toLowerCase().includes(q) ||
-      r.material_category.toLowerCase().includes(q)
+      r.process_type.toLowerCase().includes(q) ||
+      r.status.toLowerCase().includes(q)
   );
+}
+
+// ============ CLOSED ITEMS ============
+
+export function getClosedRequestsLocal(): MaterialRequest[] {
+  const requests = getAllRequestsLocal();
+  return requests
+    .filter((r) => r.status === 'Closed')
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 }

@@ -1,8 +1,6 @@
 /**
  * Google Sheets Database Layer
  * 
- * This module handles all CRUD operations using Google Sheets as the database.
- * 
  * SETUP INSTRUCTIONS:
  * 1. Create a Google Sheet with 3 tabs: "MaterialRequests", "StatusHistory", "Vendors"
  * 2. Create a Google Cloud project and enable Google Sheets API
@@ -14,16 +12,14 @@
  *    - GOOGLE_PRIVATE_KEY=your_private_key
  */
 
-import { MaterialRequest, StatusHistory, Vendor, Status } from './types';
+import { MaterialRequest, StatusHistory, Vendor, Status, ProcessType } from './types';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID || '';
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '';
 const PRIVATE_KEY = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 
-// Google Sheets API base URL
 const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
-// JWT token generation for Google API auth
 async function getAccessToken(): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
@@ -40,7 +36,6 @@ async function getAccessToken(): Promise<string> {
 
   const unsignedToken = `${encode(header)}.${encode(payload)}`;
 
-  // Sign with private key
   const crypto = await import('crypto');
   const sign = crypto.createSign('RSA-SHA256');
   sign.update(unsignedToken);
@@ -48,7 +43,6 @@ async function getAccessToken(): Promise<string> {
 
   const jwt = `${unsignedToken}.${signature}`;
 
-  // Exchange JWT for access token
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -95,29 +89,29 @@ async function updateSheetData(range: string, values: string[][]): Promise<void>
   });
 }
 
+
 // ============ MATERIAL REQUESTS ============
 
 function rowToMaterialRequest(row: string[]): MaterialRequest {
   return {
     request_id: row[0] || '',
     request_date: row[1] || '',
-    style_code: row[2] || '',
-    material_name: row[3] || '',
-    material_category: row[4] || '',
-    quantity: Number(row[5]) || 0,
-    unit: row[6] || '',
-    image_url: row[7] || '',
-    requested_by: row[8] || '',
-    department: (row[9] as MaterialRequest['department']) || 'Designer',
-    approved_by: row[10] || '',
-    current_holder: row[11] || '',
-    sent_to: row[12] || '',
-    expected_return_date: row[13] || '',
-    priority: (row[14] as MaterialRequest['priority']) || 'Medium',
-    status: (row[15] as Status) || 'Requested',
-    remarks: row[16] || '',
-    created_at: row[17] || '',
-    updated_at: row[18] || '',
+    material_name: row[2] || '',
+    process_type: (row[3] as ProcessType) || 'Plating',
+    quantity: Number(row[4]) || 0,
+    unit: row[5] || '',
+    image_url: row[6] || '',
+    requested_by: row[7] || '',
+    department: row[8] || '',
+    approved_by: row[9] || '',
+    current_holder: row[10] || '',
+    sent_to: row[11] || '',
+    expected_return_date: row[12] || '',
+    priority: (row[13] as MaterialRequest['priority']) || 'Medium',
+    status: (row[14] as Status) || 'Ordered',
+    remarks: row[15] || '',
+    created_at: row[16] || '',
+    updated_at: row[17] || '',
   };
 }
 
@@ -125,9 +119,8 @@ function materialRequestToRow(req: MaterialRequest): string[] {
   return [
     req.request_id,
     req.request_date,
-    req.style_code,
     req.material_name,
-    req.material_category,
+    req.process_type,
     String(req.quantity),
     req.unit,
     req.image_url,
@@ -146,7 +139,7 @@ function materialRequestToRow(req: MaterialRequest): string[] {
 }
 
 export async function getAllRequests(): Promise<MaterialRequest[]> {
-  const rows = await getSheetData('MaterialRequests!A2:S');
+  const rows = await getSheetData('MaterialRequests!A2:R');
   return rows.map(rowToMaterialRequest);
 }
 
@@ -156,16 +149,16 @@ export async function getRequestById(id: string): Promise<MaterialRequest | null
 }
 
 export async function createRequest(req: MaterialRequest): Promise<void> {
-  await appendSheetData('MaterialRequests!A:S', [materialRequestToRow(req)]);
+  await appendSheetData('MaterialRequests!A:R', [materialRequestToRow(req)]);
 }
 
 export async function updateRequest(req: MaterialRequest): Promise<void> {
   const rows = await getSheetData('MaterialRequests!A:A');
   const rowIndex = rows.findIndex((r) => r[0] === req.request_id);
   if (rowIndex === -1) return;
-  const sheetRow = rowIndex + 1; // +1 because sheets are 1-indexed (header is row 1)
+  const sheetRow = rowIndex + 1;
   await updateSheetData(
-    `MaterialRequests!A${sheetRow}:S${sheetRow}`,
+    `MaterialRequests!A${sheetRow}:R${sheetRow}`,
     [materialRequestToRow(req)]
   );
 }
@@ -177,7 +170,7 @@ function rowToStatusHistory(row: string[]): StatusHistory {
     history_id: row[0] || '',
     request_id: row[1] || '',
     old_status: (row[2] as StatusHistory['old_status']) || '',
-    new_status: (row[3] as Status) || 'Requested',
+    new_status: (row[3] as Status) || 'Ordered',
     updated_by: row[4] || '',
     update_time: row[5] || '',
     comments: row[6] || '',
@@ -185,15 +178,7 @@ function rowToStatusHistory(row: string[]): StatusHistory {
 }
 
 function statusHistoryToRow(h: StatusHistory): string[] {
-  return [
-    h.history_id,
-    h.request_id,
-    h.old_status,
-    h.new_status,
-    h.updated_by,
-    h.update_time,
-    h.comments,
-  ];
+  return [h.history_id, h.request_id, h.old_status, h.new_status, h.updated_by, h.update_time, h.comments];
 }
 
 export async function getHistoryByRequestId(requestId: string): Promise<StatusHistory[]> {
@@ -221,53 +206,4 @@ function rowToVendor(row: string[]): Vendor {
 export async function getAllVendors(): Promise<Vendor[]> {
   const rows = await getSheetData('Vendors!A2:F');
   return rows.map(rowToVendor);
-}
-
-// ============ DASHBOARD STATS ============
-
-export async function getDashboardStats() {
-  const requests = await getAllRequests();
-  const now = new Date();
-
-  const pending = requests.filter(
-    (r) => !['Received Back', 'Closed'].includes(r.status)
-  );
-  const delayed = requests.filter(
-    (r) =>
-      r.expected_return_date &&
-      new Date(r.expected_return_date) < now &&
-      !['Received Back', 'Closed'].includes(r.status)
-  );
-  const missing = requests.filter((r) => r.status === 'Missing');
-  const withKarigar = requests.filter((r) => r.status === 'Sent to Karigar');
-  const forPlating = requests.filter((r) => r.status === 'Sent for Plating');
-  const recent = [...requests]
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    .slice(0, 10);
-
-  return {
-    totalPending: pending.length,
-    delayed: delayed.length,
-    missing: missing.length,
-    withKarigar: withKarigar.length,
-    forPlating: forPlating.length,
-    recentUpdates: recent,
-  };
-}
-
-// ============ SEARCH ============
-
-export async function searchRequests(query: string): Promise<MaterialRequest[]> {
-  const requests = await getAllRequests();
-  const q = query.toLowerCase();
-  return requests.filter(
-    (r) =>
-      r.style_code.toLowerCase().includes(q) ||
-      r.material_name.toLowerCase().includes(q) ||
-      r.request_id.toLowerCase().includes(q) ||
-      r.requested_by.toLowerCase().includes(q) ||
-      r.current_holder.toLowerCase().includes(q) ||
-      r.department.toLowerCase().includes(q) ||
-      r.remarks.toLowerCase().includes(q)
-  );
 }

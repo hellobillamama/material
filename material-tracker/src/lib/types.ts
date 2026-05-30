@@ -1,30 +1,31 @@
 export type Status =
-  | 'Requested'
-  | 'Approved'
-  | 'In Store'
-  | 'Sent to Karigar'
-  | 'Sent for Plating'
-  | 'In QC'
-  | 'Received Back'
-  | 'Delayed'
-  | 'Missing'
+  | 'Ordered'
+  | 'In Process'
+  | 'Received'
   | 'Closed';
 
 export type Priority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
-export type Department = 'Designer' | 'Store' | 'Karigar' | 'Plating' | 'Vendor' | 'QC';
+export type ProcessType =
+  | 'Plating'
+  | 'Dying'
+  | 'Purchase'
+  | 'Wrapping'
+  | 'Jaipur Ordered'
+  | 'US Ordered'
+  | 'China Ordered'
+  | 'Waiting for Approval';
 
 export interface MaterialRequest {
   request_id: string;
   request_date: string;
-  style_code: string;
   material_name: string;
-  material_category: string;
+  process_type: ProcessType;
   quantity: number;
   unit: string;
   image_url: string;
   requested_by: string;
-  department: Department;
+  department: string;
   approved_by: string;
   current_holder: string;
   sent_to: string;
@@ -56,35 +57,35 @@ export interface Vendor {
 }
 
 export const ALL_STATUSES: Status[] = [
-  'Requested',
-  'Approved',
-  'In Store',
-  'Sent to Karigar',
-  'Sent for Plating',
-  'In QC',
-  'Received Back',
-  'Delayed',
-  'Missing',
+  'Ordered',
+  'In Process',
+  'Received',
   'Closed',
 ];
 
 export const ALL_PRIORITIES: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
-export const ALL_DEPARTMENTS: Department[] = ['Designer', 'Store', 'Karigar', 'Plating', 'Vendor', 'QC'];
+export const ALL_PROCESS_TYPES: ProcessType[] = [
+  'Plating',
+  'Dying',
+  'Purchase',
+  'Wrapping',
+  'Jaipur Ordered',
+  'US Ordered',
+  'China Ordered',
+  'Waiting for Approval',
+];
+
+// SLA days for each process type
+export const PROCESS_SLA: Record<ProcessType, number> = {
+  'Plating': 3,
+  'Dying': 2,
+  'Purchase': 1,
+  'Wrapping': 3,
+  'Jaipur Ordered': 3,
+  'US Ordered': 7,
+  'China Ordered': 7,
+  'Waiting for Approval': 1,
+};
 
 export const UNITS = ['pcs', 'grams', 'meters', 'sets', 'pairs', 'kg', 'lots'];
-
-export const MATERIAL_CATEGORIES = [
-  'Gold',
-  'Silver',
-  'Diamond',
-  'Gemstone',
-  'Pearl',
-  'Polki',
-  'Kundan',
-  'Meena',
-  'Chain',
-  'Finding',
-  'Packaging',
-  'Other',
-];

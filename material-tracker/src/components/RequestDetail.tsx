@@ -11,10 +11,12 @@ import { MaterialRequest, StatusHistory, Status, ALL_STATUSES } from "@/lib/type
 import {
   getStatusColor,
   getPriorityColor,
+  getProcessTypeColor,
   formatDate,
   formatDateTime,
   isDelayed,
   generateHistoryId,
+  getSLARemaining,
 } from "@/lib/utils";
 import { HiArrowLeft, HiClock, HiUser, HiLocationMarker } from "react-icons/hi";
 
@@ -23,11 +25,12 @@ interface RequestDetailProps {
   onBack: () => void;
 }
 
+
 export default function RequestDetail({ requestId, onBack }: RequestDetailProps) {
   const [request, setRequest] = useState<MaterialRequest | null>(null);
   const [history, setHistory] = useState<StatusHistory[]>([]);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [newStatus, setNewStatus] = useState<Status>("Requested");
+  const [newStatus, setNewStatus] = useState<Status>("Ordered");
   const [statusComment, setStatusComment] = useState("");
   const [newHolder, setNewHolder] = useState("");
 
@@ -45,11 +48,10 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
     setHistory(hist);
   }
 
-  function handleQuickAction(status: Status) {
+  function handleAction(status: Status) {
     if (!request) return;
     const now = new Date().toISOString();
 
-    // Add history
     addStatusHistoryLocal({
       history_id: generateHistoryId(),
       request_id: request.request_id,
@@ -57,10 +59,9 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
       new_status: status,
       updated_by: "Admin",
       update_time: now,
-      comments: `Quick action: ${status}`,
+      comments: `Status changed to ${status}`,
     });
 
-    // Update request
     updateRequestLocal({
       ...request,
       status,
@@ -69,6 +70,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
 
     loadData();
   }
+
 
   function handleStatusUpdate() {
     if (!request) return;
@@ -111,6 +113,8 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
   }
 
   const delayed = isDelayed(request.expected_return_date, request.status);
+  const sla = getSLARemaining(request.expected_return_date, request.status);
+
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 pt-6 pb-8">
@@ -124,22 +128,31 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
         </button>
         <div className="flex-1">
           <h1 className="text-lg font-bold text-gray-900">{request.request_id}</h1>
-          <p className="text-xs text-gray-500">{request.style_code}</p>
+          <p className="text-xs text-gray-500">{request.process_type}</p>
         </div>
         <span className={`status-badge ${getStatusColor(request.status)}`}>
           {request.status}
         </span>
       </div>
 
-      {/* Delayed Warning */}
+      {/* Delayed / SLA Warning */}
       {delayed && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-center gap-2">
           <span className="text-red-500 text-lg">⚠️</span>
           <div>
             <p className="text-sm font-medium text-red-700">Material Delayed</p>
-            <p className="text-xs text-red-500">
-              Expected return: {formatDate(request.expected_return_date)}
-            </p>
+            <p className="text-xs text-red-500">{sla.text} — Due: {formatDate(request.expected_return_date)}</p>
+          </div>
+        </div>
+      )}
+
+      {/* SLA Timer */}
+      {!delayed && sla.text && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 flex items-center gap-2">
+          <HiClock size={18} className="text-blue-600" />
+          <div>
+            <p className="text-sm font-medium text-blue-700">SLA: {sla.text}</p>
+            <p className="text-xs text-blue-500">Due: {formatDate(request.expected_return_date)}</p>
           </div>
         </div>
       )}
@@ -147,13 +160,10 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
       {/* Image */}
       {request.image_url && (
         <div className="mb-4 rounded-xl overflow-hidden border border-gray-200">
-          <img
-            src={request.image_url}
-            alt="Material"
-            className="w-full h-48 object-cover"
-          />
+          <img src={request.image_url} alt="Material" className="w-full h-48 object-cover" />
         </div>
       )}
+
 
       {/* Material Info */}
       <div className="card mb-4">
@@ -162,14 +172,14 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
         </h2>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="text-gray-400 text-xs">Category</p>
-            <p className="font-medium">{request.material_category}</p>
+            <p className="text-gray-400 text-xs">Process Type</p>
+            <span className={`status-badge ${getProcessTypeColor(request.process_type)}`}>
+              {request.process_type}
+            </span>
           </div>
           <div>
             <p className="text-gray-400 text-xs">Quantity</p>
-            <p className="font-medium">
-              {request.quantity} {request.unit}
-            </p>
+            <p className="font-medium">{request.quantity} {request.unit}</p>
           </div>
           <div>
             <p className="text-gray-400 text-xs">Priority</p>
@@ -179,7 +189,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
           </div>
           <div>
             <p className="text-gray-400 text-xs">Department</p>
-            <p className="font-medium">{request.department}</p>
+            <p className="font-medium">{request.department || '-'}</p>
           </div>
         </div>
       </div>
@@ -213,9 +223,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
             </div>
             <div>
               <p className="text-xs text-gray-400">Current Holder</p>
-              <p className="text-sm font-medium">
-                {request.current_holder || "Not assigned"}
-              </p>
+              <p className="text-sm font-medium">{request.current_holder || "Not assigned"}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -223,7 +231,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
               <HiClock size={16} className="text-gray-600" />
             </div>
             <div>
-              <p className="text-xs text-gray-400">Expected Return</p>
+              <p className="text-xs text-gray-400">Expected Return (SLA)</p>
               <p className={`text-sm font-medium ${delayed ? "text-red-600" : ""}`}>
                 {formatDate(request.expected_return_date)}
               </p>
@@ -231,6 +239,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
           </div>
         </div>
       </div>
+
 
       {/* Remarks */}
       {request.remarks && (
@@ -240,46 +249,37 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
         </div>
       )}
 
-      {/* Quick Action Buttons */}
+      {/* Action Buttons: Ordered, In Process, Received, Close */}
       <div className="mb-4">
         <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">
-          Quick Actions
+          Actions
         </p>
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => handleQuickAction("Approved")}
-            className="btn-success text-sm py-3"
-          >
-            ✓ Approve
-          </button>
-          <button
-            onClick={() => handleQuickAction("Received Back")}
+            onClick={() => handleAction("Ordered")}
             className="btn-primary text-sm py-3"
           >
-            📦 Received
+            📦 Ordered
           </button>
           <button
-            onClick={() => handleQuickAction("Sent to Karigar")}
+            onClick={() => handleAction("In Process")}
             className="btn-warning text-sm py-3"
           >
-            🔨 Sent
+            ⚙️ In Process
           </button>
           <button
-            onClick={() => handleQuickAction("Closed")}
+            onClick={() => handleAction("Received")}
+            className="btn-success text-sm py-3"
+          >
+            ✓ Received
+          </button>
+          <button
+            onClick={() => handleAction("Closed")}
             className="btn-secondary text-sm py-3"
           >
             ✕ Close
           </button>
         </div>
-        <button
-          onClick={() => {
-            setNewStatus(request.status);
-            setShowStatusModal(true);
-          }}
-          className="w-full mt-2 btn-secondary text-sm"
-        >
-          Change Status...
-        </button>
       </div>
 
       {/* Timeline */}
@@ -296,11 +296,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
             {history.map((h, idx) => (
               <div key={h.history_id} className="flex gap-3">
                 <div className="flex flex-col items-center">
-                  <div
-                    className={`w-3 h-3 rounded-full ${
-                      idx === 0 ? "bg-blue-500" : "bg-gray-300"
-                    }`}
-                  />
+                  <div className={`w-3 h-3 rounded-full ${idx === 0 ? "bg-blue-500" : "bg-gray-300"}`} />
                   {idx < history.length - 1 && (
                     <div className="w-0.5 h-full bg-gray-200 min-h-[2rem]" />
                   )}
@@ -311,9 +307,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
                       {h.new_status}
                     </span>
                     {h.old_status && (
-                      <span className="text-xs text-gray-400">
-                        from {h.old_status}
-                      </span>
+                      <span className="text-xs text-gray-400">from {h.old_status}</span>
                     )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -329,6 +323,7 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
         )}
       </div>
 
+
       {/* Dates */}
       <div className="card text-xs text-gray-400">
         <p>Created: {formatDateTime(request.created_at)}</p>
@@ -340,28 +335,20 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
           <div className="bg-white w-full max-w-lg rounded-t-2xl p-6 animate-slide-up">
             <h3 className="text-lg font-bold mb-4">Update Status</h3>
-
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                New Status
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">New Status</label>
               <select
                 className="input-field"
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value as Status)}
               >
                 {ALL_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
+                  <option key={s} value={s}>{s}</option>
                 ))}
               </select>
             </div>
-
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Holder
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Current Holder</label>
               <input
                 type="text"
                 className="input-field"
@@ -370,11 +357,8 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
                 onChange={(e) => setNewHolder(e.target.value)}
               />
             </div>
-
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Comments
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Comments</label>
               <textarea
                 className="input-field resize-none"
                 rows={2}
@@ -383,17 +367,9 @@ export default function RequestDetail({ requestId, onBack }: RequestDetailProps)
                 onChange={(e) => setStatusComment(e.target.value)}
               />
             </div>
-
             <div className="flex gap-3">
-              <button
-                onClick={() => setShowStatusModal(false)}
-                className="btn-secondary flex-1"
-              >
-                Cancel
-              </button>
-              <button onClick={handleStatusUpdate} className="btn-primary flex-1">
-                Update
-              </button>
+              <button onClick={() => setShowStatusModal(false)} className="btn-secondary flex-1">Cancel</button>
+              <button onClick={handleStatusUpdate} className="btn-primary flex-1">Update</button>
             </div>
           </div>
         </div>
